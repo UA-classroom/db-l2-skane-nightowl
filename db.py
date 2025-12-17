@@ -1,48 +1,273 @@
+import os
+
 import psycopg2
+from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
-"""
-This file is responsible for making database queries, which your fastapi endpoints/routes can use.
-The reason we split them up is to avoid clutter in the endpoints, so that the endpoints might focus on other tasks 
-
-- Try to return results with cursor.fetchall() or cursor.fetchone() when possible
-- Make sure you always give the user response if something went right or wrong, sometimes 
-you might need to use the RETURNING keyword to garantuee that something went right / wrong
-e.g when making DELETE or UPDATE queries
-- No need to use a class here
-- Try to raise exceptions to make them more reusable and work a lot with returns
-- You will need to decide which parameters each function should receive. All functions 
-start with a connection parameter.
-- Below, a few inspirational functions exist - feel free to completely ignore how they are structured
-- E.g, if you decide to use psycopg3, you'd be able to directly use pydantic models with the cursor, these examples are however using psycopg2 and RealDictCursor
-"""
+load_dotenv()
 
 
-### THIS IS JUST AN EXAMPLE OF A FUNCTION FOR INSPIRATION FOR A LIST-OPERATION (FETCHING MANY ENTRIES)
-# def get_items(con):
-#     with con:
-#         with con.cursor(cursor_factory=RealDictCursor) as cursor:
-#             cursor.execute("SELECT * FROM items;")
-#             items = cursor.fetchall()
-#     return items
+# ---------- CONNECTION ----------
+
+def get_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+    )
 
 
-### THIS IS JUST INSPIRATION FOR A DETAIL OPERATION (FETCHING ONE ENTRY)
-# def get_item(con, item_id):
-#     with con:
-#         with con.cursor(cursor_factory=RealDictCursor) as cursor:
-#             cursor.execute("""SELECT * FROM items WHERE id = %s""", (item_id,))
-#             item = cursor.fetchone()
-#             return item
+# ---------- USERS ----------
+
+def get_users(con):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT id, email, first_name, last_name, role_id FROM users;")
+        return cur.fetchall()
 
 
-### THIS IS JUST INSPIRATION FOR A CREATE-OPERATION
-# def add_item(con, title, description):
-#     with con:
-#         with con.cursor(cursor_factory=RealDictCursor) as cursor:
-#             cursor.execute(
-#                 "INSERT INTO items (title, description) VALUES (%s, %s) RETURNING id;",
-#                 (title, description),
-#             )
-#             item_id = cursor.fetchone()["id"]
-#     return item_id
+def get_user_by_id(con, user_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM users WHERE id = %s;", (user_id,))
+        return cur.fetchone()
+
+
+def create_user(con, email, password_hash, first_name, last_name, role_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO users (email, password_hash, first_name, last_name, role_id)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING *;
+            """,
+            (email, password_hash, first_name, last_name, role_id),
+        )
+        return cur.fetchone()
+
+
+def update_user(con, user_id, first_name, last_name):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            UPDATE users
+            SET first_name = %s, last_name = %s
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (first_name, last_name, user_id),
+        )
+        return cur.fetchone()
+
+
+def delete_user(con, user_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "DELETE FROM users WHERE id = %s RETURNING id;",
+            (user_id,),
+        )
+        return cur.fetchone()
+
+
+# ---------- LISTINGS ----------
+
+def get_listings(con):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM listings;")
+        return cur.fetchall()
+
+
+def get_listing_by_id(con, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM listings WHERE id = %s;", (listing_id,))
+        return cur.fetchone()
+
+
+def create_listing(
+    con,
+    title,
+    description,
+    price,
+    living_area,
+    rooms,
+    category_id,
+    agent_id,
+    status,
+    address_id,
+):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO listings
+            (title, description, price, living_area, rooms,
+            category_id, agent_id, status, address_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *;
+            """,
+            (
+                title,
+                description,
+                price,
+                living_area,
+                rooms,
+                category_id,
+                agent_id,
+                status,
+                address_id,
+            ),
+        )
+        return cur.fetchone()
+
+
+def update_listing(con, listing_id, title, description, price):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            UPDATE listings
+            SET title = %s, description = %s, price = %s
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (title, description, price, listing_id),
+        )
+        return cur.fetchone()
+
+
+def update_listing_status(con, listing_id, status):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            UPDATE listings
+            SET status = %s
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (status, listing_id),
+        )
+        return cur.fetchone()
+
+
+def delete_listing(con, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "DELETE FROM listings WHERE id = %s RETURNING id;",
+            (listing_id,),
+        )
+        return cur.fetchone()
+
+
+# ---------- BIDS ----------
+
+def get_bids_for_listing(con, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM bids WHERE listing_id = %s ORDER BY amount DESC;",
+            (listing_id,),
+        )
+        return cur.fetchall()
+
+
+def create_bid(con, listing_id, bidder_id, amount):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO bids (listing_id, bidder_id, amount)
+            VALUES (%s, %s, %s)
+            RETURNING *;
+            """,
+            (listing_id, bidder_id, amount),
+        )
+        return cur.fetchone()
+
+
+def accept_bid(con, bid_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            UPDATE bids
+            SET is_accepted = TRUE
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (bid_id,),
+        )
+        return cur.fetchone()
+
+
+# ---------- FAVORITES ----------
+
+def add_favorite(con, user_id, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO favorites (user_id, listing_id)
+            VALUES (%s, %s)
+            RETURNING *;
+            """,
+            (user_id, listing_id),
+        )
+        return cur.fetchone()
+
+
+def remove_favorite(con, user_id, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            DELETE FROM favorites
+            WHERE user_id = %s AND listing_id = %s
+            RETURNING *;
+            """,
+            (user_id, listing_id),
+        )
+        return cur.fetchone()
+
+
+def get_user_favorites(con, user_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT l.*
+            FROM listings l
+            JOIN favorites f ON l.id = f.listing_id
+            WHERE f.user_id = %s;
+            """,
+            (user_id,),
+        )
+        return cur.fetchall()
+
+# ---------- VIEWINGS ----------
+
+def get_viewings_for_listing(con, listing_id):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM viewings WHERE listing_id = %s;",
+            (listing_id,)
+        )
+        return cur.fetchall()
+
+
+def create_viewing(con, listing_id, start_time, end_time=None):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO viewings (listing_id, start_time, end_time)
+            VALUES (%s, %s, %s)
+            RETURNING *;
+            """,
+            (listing_id, start_time, end_time),
+        )
+        return cur.fetchone()
+    
+# ---------- ADDRESSES ----------
+
+def create_address(con, street, postal_code, city, country):
+    with con, con.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            INSERT INTO addresses (street, postal_code, city, country)
+            VALUES (%s, %s, %s, %s)
+            RETURNING *;
+            """,
+            (street, postal_code, city, country),
+        )
+        return cur.fetchone()
